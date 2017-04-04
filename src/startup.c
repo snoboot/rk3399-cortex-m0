@@ -47,7 +47,7 @@ void WEAK svc_handler(void);
 void WEAK pend_sv_handler(void);
 void WEAK systick_handler(void);
 
-extern int main(void);
+extern void m0_main(void);
 
 /* Function prototypes */
 static void default_reset_handler(void);
@@ -88,7 +88,7 @@ void (* const g_pfnVectors[])(void) = {
 static void default_reset_handler(void)
 {
 	/* call the application's entry point */
-	main();
+	m0_main();
 }
 
 /**
