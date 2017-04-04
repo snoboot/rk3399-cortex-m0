@@ -29,14 +29,18 @@
 #
 
 # Cross Compile
-M0_CROSS_COMPILE ?= arm-none-eabi-
+#
+# For a default cross-compile we use the naming convention from crosstools-ng
+# as this toolchain can be easily and quickly regenerated from source.
+CROSS_COMPILE ?= arm-cortex_m0-eabi-
 
 # Build architecture
-ARCH		:= cortex-m0
+ARCH := cortex-m0
 
 # Build platform
-PLAT_M0		?= rk3399m0
+PLAT_M0	?= rk3399m0
 
+V ?= 0
 ifeq (${V},0)
 	Q=@
 else
@@ -47,7 +51,7 @@ export Q
 .SUFFIXES:
 
 INCLUDES		+= -Iinclude/ \
-			   -I../../include/shared/
+			   -Iinclude/shared/
 
 # NOTE: Add C source files here
 C_SOURCES		:= src/startup.c \
@@ -57,64 +61,40 @@ C_SOURCES		:= src/startup.c \
 			   src/stopwatch.c
 
 # Flags definition
-COMMON_FLAGS		:= -g -mcpu=$(ARCH) -mthumb -Wall -O3 -nostdlib -mfloat-abi=soft
+COMMON_FLAGS		:= -g -mcpu=$(ARCH) -mthumb -Wall -Os -nostdlib -mfloat-abi=soft
 CFLAGS			:= -ffunction-sections -fdata-sections -fomit-frame-pointer -fno-common
 ASFLAGS			:= -Wa,--gdwarf-2
 LDFLAGS			:= -Wl,--gc-sections -Wl,--build-id=none
 
 # Cross tool
-CC			:= ${M0_CROSS_COMPILE}gcc
-CPP			:= ${M0_CROSS_COMPILE}cpp
-AR			:= ${M0_CROSS_COMPILE}ar
-OC			:= ${M0_CROSS_COMPILE}objcopy
-OD			:= ${M0_CROSS_COMPILE}objdump
-NM			:= ${M0_CROSS_COMPILE}nm
+CC			:= ${CROSS_COMPILE}gcc
+CPP			:= ${CROSS_COMPILE}cpp
+AR			:= ${CROSS_COMPILE}ar
+OC			:= ${CROSS_COMPILE}objcopy
+OD			:= ${CROSS_COMPILE}objdump
+NM			:= ${CROSS_COMPILE}nm
 
-# NOTE: The line continuation '\' is required in the next define otherwise we
-# end up with a line-feed characer at the end of the last c filename.
-# Also bare this issue in mind if extending the list of supported filetypes.
 define SOURCES_TO_OBJS
-	$(notdir $(patsubst %.c,%.o,$(filter %.c,$(1)))) \
-	$(notdir $(patsubst %.S,%.o,$(filter %.S,$(1))))
+	$(patsubst %.c,%.o,$(filter %.c,$(1))) \
+	$(patsubst %.S,%.o,$(filter %.S,$(1)))
 endef
 
-SOURCES 		:= $(C_SOURCES)
-OBJS 			:= $(addprefix $(BUILD)/,$(call SOURCES_TO_OBJS,$(SOURCES)))
-LINKERFILE		:= $(BUILD)/$(PLAT_M0).ld
-MAPFILE			:= $(BUILD)/$(PLAT_M0).map
-ELF 			:= $(BUILD)/$(PLAT_M0).elf
-BIN 			:= $(BUILD)/$(PLAT_M0).bin
+CSRC := $(C_SOURCES)
+OBJS := $(CSRC:.c=.o) $(SSRC:.s=.o)
+
+LINKERFILE		:= $(PLAT_M0).ld
+MAPFILE			:= $(PLAT_M0).map
+ELF 			:= $(PLAT_M0).elf
+BIN 			:= $(PLAT_M0).bin
 LINKERFILE_SRC		:= src/$(PLAT_M0).ld.S
 
-# Function definition related compilation
-define MAKE_C
-$(eval OBJ := $(1)/$(patsubst %.c,%.o,$(notdir $(2))))
--include $(patsubst %.o,%.d,$(OBJ))
+%.o : %.c
+	@echo "  CC      $<"
+	$(Q)$(CC) $(COMMON_FLAGS) $(CFLAGS) $(INCLUDES) -MMD -MT $@ -c $< -o $@
 
-$(OBJ) : $(2)
-	@echo "  CC      $$<"
-	$$(Q)$$(CC) $$(COMMON_FLAGS) $$(CFLAGS) $$(INCLUDES) -MMD -MT $$@ -c $$< -o $$@
-endef
-
-define MAKE_S
-$(eval OBJ := $(1)/$(patsubst %.S,%.o,$(notdir $(2))))
-
-$(OBJ) : $(2)
-	@echo "  AS      $$<"
-	$$(Q)$$(CC) -x assembler-with-cpp $$(COMMON_FLAGS) $$(ASFLAGS) -c $$< -o $$@
-endef
-
-define MAKE_OBJS
-	$(eval C_OBJS := $(filter %.c,$(2)))
-	$(eval REMAIN := $(filter-out %.c,$(2)))
-	$(eval $(foreach obj,$(C_OBJS),$(call MAKE_C,$(1),$(obj),$(3))))
-
-	$(eval S_OBJS := $(filter %.S,$(REMAIN)))
-	$(eval REMAIN := $(filter-out %.S,$(REMAIN)))
-	$(eval $(foreach obj,$(S_OBJS),$(call MAKE_S,$(1),$(obj),$(3))))
-
-	$(and $(REMAIN),$(error Unexpected source files present: $(REMAIN)))
-endef
+$.o : %.s
+	@echo "  AS      $<"
+	$(Q)$(CC) -x assembler-with-cpp $(COMMON_FLAGS) $(ASFLAGS) -c $< -o $@
 
 .DEFAULT_GOAL := $(BIN)
 
@@ -129,5 +109,9 @@ $(ELF) : $(OBJS) $(LINKERFILE)
 $(BIN) : $(ELF)
 	@echo "  BIN     $@"
 	$(Q)$(OC) -O binary $< $@
+
+clean:
+	@echo "  CLEAN"
+	$(Q)rm -f $(OBJS) $(ELF) $(BIN) $(LINKERFILE)
 
 $(eval $(call MAKE_OBJS,$(BUILD),$(SOURCES),$(1)))
