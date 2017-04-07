@@ -27,6 +27,7 @@ Session.vim
 tags
 
 ### C
+*.bin
 
 # Prerequisites
 *.d
@@ -37,6 +38,7 @@ tags
 
 # Linker output
 *.map
+*.ld
 
 # Precompiled Headers
 *.gch
